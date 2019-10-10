@@ -1,5 +1,7 @@
+# frozen_string_literal: true
+
 class OrderLinesController < ApplicationController
-  before_action :set_order_line, only: [:show, :update, :destroy]
+  before_action :set_order_line, only: %i[show update destroy]
 
   def index
     @order_line = OrderLine.all
