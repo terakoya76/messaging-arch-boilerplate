@@ -2,11 +2,6 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
 
-Parameters:
-  Alias:
-    Type: String
-    Default: rails_ecs_boilerplate
-
 Resources:
   Key:
     Type: AWS::KMS::Key
@@ -27,26 +22,61 @@ Resources:
   KeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub alias/${Alias}
+      AliasName: alias/messaging-arch-kms
       TargetKeyId: !Ref Key
 
-  RailsSecretKeyBase:
+  OrderSecretKeyBase:
     Type: AWS::SecretsManager::Secret
     Properties:
       Description: production_key_base
       KmsKeyId: !Ref Key
-      Name: !Sub ${AWS::StackName}-secret-key-base
+      Name: !Sub ${AWS::StackName}-order-secret-key-base
 
-  RailsDatabaseUrl:
+  OrderDatabaseUrl:
     Type: AWS::SecretsManager::Secret
     Properties:
       Description: database_url
       KmsKeyId: !Ref Key
-      Name: !Sub ${AWS::StackName}-database-url
+      Name: !Sub ${AWS::StackName}-order-database-url
+
+  InvoiceSecretKeyBase:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: production_key_base
+      KmsKeyId: !Ref Key
+      Name: !Sub ${AWS::StackName}-invoice-secret-key-base
+
+  InvoiceDatabaseUrl:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: database_url
+      KmsKeyId: !Ref Key
+      Name: !Sub ${AWS::StackName}-invoice-database-url
+
+  DeliverySecretKeyBase:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: production_key_base
+      KmsKeyId: !Ref Key
+      Name: !Sub ${AWS::StackName}-delivery-secret-key-base
+
+  DeliveryDatabaseUrl:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: database_url
+      KmsKeyId: !Ref Key
+      Name: !Sub ${AWS::StackName}-delivery-database-url
 
 Outputs:
-  RailsSecretKeyBase:
-    Value: !Ref RailsSecretKeyBase
-  RailsDatabaseUrl:
-    Value: !Ref RailsDatabaseUrl
-
+  OrderSecretKeyBase:
+    Value: !Ref OrderSecretKeyBase
+  OrderDatabaseUrl:
+    Value: !Ref OrderDatabaseUrl
+  InvoiceSecretKeyBase:
+    Value: !Ref InvoiceSecretKeyBase
+  InvoiceDatabaseUrl:
+    Value: !Ref InvoiceDatabaseUrl
+  DeliverySecretKeyBase:
+    Value: !Ref DeliverySecretKeyBase
+  DeliveryDatabaseUrl:
+    Value: !Ref DeliveryDatabaseUrl

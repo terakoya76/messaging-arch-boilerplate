@@ -7,7 +7,7 @@ Parameters:
   #
   VpcName:
     Type: String
-    Default: rails-ecs-boilerplate-vpc
+    Default: messaging-arch-vpc
 
   VpcCIDR:
     Type: String
@@ -35,23 +35,51 @@ Parameters:
   KMSKeyArn:
     Type: String
 
-  SecretKeyBaseSecretArn:
+  OrderSecretKeyBaseSecretArn:
     Type: String
 
-  DatabaseUrlSecretArn:
+  OrderDatabaseUrlSecretArn:
     Type: String
 
-  ECRRepoName:
+  OrderServiceName:
     Type: String
-    Default: rails-ecs-boilerplate
+    Default: order-service
+
+  OrderECRRepoName:
+    Type: String
+    Default: messaging-arch/order-service
+
+  InvoiceSecretKeyBaseSecretArn:
+    Type: String
+
+  InvoiceDatabaseUrlSecretArn:
+    Type: String
+
+  InvoiceServiceName:
+    Type: String
+    Default: invoice-service
+
+  InvoiceECRRepoName:
+    Type: String
+    Default: messaging-arch/invoice-service
+
+  DeliverySecretKeyBaseSecretArn:
+    Type: String
+
+  DeliveryDatabaseUrlSecretArn:
+    Type: String
+
+  DeliveryServiceName:
+    Type: String
+    Default: delivery-service
+
+  DeliveryECRRepoName:
+    Type: String
+    Default: messaging-arch/delivery-service
 
   #
   # RDS
   #
-  DBInstanceName:
-    Type: String
-    Default: rails-ecs-boilerplate-instance
-
   MySQLMajorVersion:
     Type: String
     Default: 8.0
@@ -71,10 +99,6 @@ Parameters:
   DBInstanceStorageType:
     Type: String
     Default: gp2
-
-  DBName:
-    Type: String
-    Default: railsecsboilerplatedb
 
   DBMasterUserName:
     Type: String
@@ -104,7 +128,7 @@ Parameters:
   #
   GitHubRepo:
     Type: String
-    Default: rails-ecs-boilerplate
+    Default: messaging-arch
 
   GitHubBranch:
     Type: String
@@ -206,29 +230,111 @@ Resources:
           ToPort: 80
       VpcId: !Ref VPC
 
-  LoadBalancer:
+  OrderLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
+      Name: messaging-arch-order-service
       Subnets:
         - !Ref Subnet1
         - !Ref Subnet2
       SecurityGroups:
         - !Ref SecurityGroupELB
 
-  LoadBalancerListener:
+  OrderLoadBalancerListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      LoadBalancerArn: !Ref LoadBalancer
+      LoadBalancerArn: !Ref OrderLoadBalancer
       Port: 80
       Protocol: HTTP
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref TargetGroup
+          TargetGroupArn: !Ref OrderTargetGroup
 
-  TargetGroup:
+  OrderTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    DependsOn: LoadBalancer
+    DependsOn: OrderLoadBalancer
     Properties:
+      Name: messaging-arch-order-service
+      VpcId: !Ref VPC
+      Port: 3000
+      Protocol: HTTP
+      Matcher:
+        HttpCode: 200-299
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /monitor
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      TargetType: ip
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 30
+
+  InvoiceLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: messaging-arch-invoice-service
+      Subnets:
+        - !Ref Subnet1
+        - !Ref Subnet2
+      SecurityGroups:
+        - !Ref SecurityGroupELB
+
+  InvoiceLoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref InvoiceLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref InvoiceTargetGroup
+
+  InvoiceTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: InvoiceLoadBalancer
+    Properties:
+      Name: messaging-arch-invoice-service
+      VpcId: !Ref VPC
+      Port: 3000
+      Protocol: HTTP
+      Matcher:
+        HttpCode: 200-299
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /monitor
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      TargetType: ip
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 30
+
+  DeliveryLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: messaging-arch-delivery-service
+      Subnets:
+        - !Ref Subnet1
+        - !Ref Subnet2
+      SecurityGroups:
+        - !Ref SecurityGroupELB
+
+  DeliveryLoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref DeliveryLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref DeliveryTargetGroup
+
+  DeliveryTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: DeliveryLoadBalancer
+    Properties:
+      Name: messaging-arch-delivery-service
       VpcId: !Ref VPC
       Port: 3000
       Protocol: HTTP
@@ -295,13 +401,13 @@ Resources:
                 Action:
                   - kms:Decrypt
 
-  FargateService:
+  OrderFargateService:
     Type: AWS::ECS::Service
-    DependsOn: LoadBalancerListener
+    DependsOn: OrderLoadBalancerListener
     Properties:
       Cluster: !Ref Cluster
       DesiredCount: !Ref DesiredCount
-      TaskDefinition: !Ref AppTaskDefinition
+      TaskDefinition: !Ref OrderAppTaskDefinition
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:
@@ -312,11 +418,11 @@ Resources:
             - !Ref Subnet1
             - !Ref Subnet2
       LoadBalancers:
-        - ContainerName: !Sub ${ECRRepoName}-app
+        - ContainerName: !Sub ${OrderServiceName}-app
           ContainerPort: 3000
-          TargetGroupArn: !Ref TargetGroup
+          TargetGroupArn: !Ref OrderTargetGroup
 
-  AppTaskDefinition:
+  OrderAppTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: !Sub ${AWS::StackName}
@@ -327,17 +433,17 @@ Resources:
       NetworkMode: awsvpc
       ExecutionRoleArn: !Ref ECSTaskExecutionRole
       ContainerDefinitions:
-        - Name: !Sub ${ECRRepoName}-app
-          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepoName}:latest
+        - Name: !Sub ${OrderServiceName}-app
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${OrderECRRepoName}:latest
           Essential: true
           Memory: 256
           PortMappings:
             - ContainerPort: 3000
           Secrets:
             - Name: SECRET_KEY_BASE
-              ValueFrom: !Ref SecretKeyBaseSecretArn
+              ValueFrom: !Ref OrderSecretKeyBaseSecretArn
             - Name: DATABASE_URL
-              ValueFrom: !Ref DatabaseUrlSecretArn
+              ValueFrom: !Ref OrderDatabaseUrlSecretArn
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -345,7 +451,7 @@ Resources:
               awslogs-group: !Ref LogGroup
               awslogs-stream-prefix: !Sub ${AWS::StackName}-app
 
-  MigrateTaskDefinition:
+  OrderMigrateTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: !Sub ${AWS::StackName}
@@ -356,13 +462,13 @@ Resources:
       NetworkMode: awsvpc
       ExecutionRoleArn: !Ref ECSTaskExecutionRole
       ContainerDefinitions:
-        - Name: !Sub ${ECRRepoName}-migrate
+        - Name: !Sub ${OrderServiceName}-migrate
           Command:
             - bundle
             - ex
             - rake
             - "db:migrate"
-          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepoName}:latest
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${OrderECRRepoName}:latest
           Environment:
             - Name: RAILS_ENV
               Value: production
@@ -370,9 +476,9 @@ Resources:
           Memory: 256
           Secrets:
             - Name: SECRET_KEY_BASE
-              ValueFrom: !Ref SecretKeyBaseSecretArn
+              ValueFrom: !Ref OrderSecretKeyBaseSecretArn
             - Name: DATABASE_URL
-              ValueFrom: !Ref DatabaseUrlSecretArn
+              ValueFrom: !Ref OrderDatabaseUrlSecretArn
           LogConfiguration:
           LogConfiguration:
             LogDriver: awslogs
@@ -381,19 +487,192 @@ Resources:
               awslogs-group: !Ref LogGroup
               awslogs-stream-prefix: !Sub ${AWS::StackName}-migrate
 
+  InvoiceFargateService:
+    Type: AWS::ECS::Service
+    DependsOn: InvoiceLoadBalancerListener
+    Properties:
+      Cluster: !Ref Cluster
+      DesiredCount: !Ref DesiredCount
+      TaskDefinition: !Ref InvoiceAppTaskDefinition
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref SecurityGroupECS
+          Subnets:
+            - !Ref Subnet1
+            - !Ref Subnet2
+      LoadBalancers:
+        - ContainerName: !Sub ${InvoiceServiceName}-app
+          ContainerPort: 3000
+          TargetGroupArn: !Ref InvoiceTargetGroup
+
+  InvoiceAppTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${AWS::StackName}
+      RequiresCompatibilities:
+        - FARGATE
+      Memory: 512
+      Cpu: 256
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      ContainerDefinitions:
+        - Name: !Sub ${InvoiceServiceName}-app
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${InvoiceECRRepoName}:latest
+          Essential: true
+          Memory: 256
+          PortMappings:
+            - ContainerPort: 3000
+          Secrets:
+            - Name: SECRET_KEY_BASE
+              ValueFrom: !Ref InvoiceSecretKeyBaseSecretArn
+            - Name: DATABASE_URL
+              ValueFrom: !Ref InvoiceDatabaseUrlSecretArn
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref AWS::Region
+              awslogs-group: !Ref LogGroup
+              awslogs-stream-prefix: !Sub ${AWS::StackName}-app
+
+  InvoiceMigrateTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${AWS::StackName}
+      RequiresCompatibilities:
+        - FARGATE
+      Memory: 512
+      Cpu: 256
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      ContainerDefinitions:
+        - Name: !Sub ${InvoiceServiceName}-migrate
+          Command:
+            - bundle
+            - ex
+            - rake
+            - "db:migrate"
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${InvoiceECRRepoName}:latest
+          Environment:
+            - Name: RAILS_ENV
+              Value: production
+          Essential: true
+          Memory: 256
+          Secrets:
+            - Name: SECRET_KEY_BASE
+              ValueFrom: !Ref InvoiceSecretKeyBaseSecretArn
+            - Name: DATABASE_URL
+              ValueFrom: !Ref InvoiceDatabaseUrlSecretArn
+          LogConfiguration:
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref AWS::Region
+              awslogs-group: !Ref LogGroup
+              awslogs-stream-prefix: !Sub ${AWS::StackName}-migrate
+
+  DeliveryFargateService:
+    Type: AWS::ECS::Service
+    DependsOn: DeliveryLoadBalancerListener
+    Properties:
+      Cluster: !Ref Cluster
+      DesiredCount: !Ref DesiredCount
+      TaskDefinition: !Ref DeliveryAppTaskDefinition
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref SecurityGroupECS
+          Subnets:
+            - !Ref Subnet1
+            - !Ref Subnet2
+      LoadBalancers:
+        - ContainerName: !Sub ${DeliveryServiceName}-app
+          ContainerPort: 3000
+          TargetGroupArn: !Ref DeliveryTargetGroup
+
+  DeliveryAppTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${AWS::StackName}
+      RequiresCompatibilities:
+        - FARGATE
+      Memory: 512
+      Cpu: 256
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      ContainerDefinitions:
+        - Name: !Sub ${DeliveryServiceName}-app
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${DeliveryECRRepoName}:latest
+          Essential: true
+          Memory: 256
+          PortMappings:
+            - ContainerPort: 3000
+          Secrets:
+            - Name: SECRET_KEY_BASE
+              ValueFrom: !Ref DeliverySecretKeyBaseSecretArn
+            - Name: DATABASE_URL
+              ValueFrom: !Ref DeliveryDatabaseUrlSecretArn
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref AWS::Region
+              awslogs-group: !Ref LogGroup
+              awslogs-stream-prefix: !Sub ${AWS::StackName}-app
+
+  DeliveryMigrateTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${AWS::StackName}
+      RequiresCompatibilities:
+        - FARGATE
+      Memory: 512
+      Cpu: 256
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      ContainerDefinitions:
+        - Name: !Sub ${DeliveryServiceName}-migrate
+          Command:
+            - bundle
+            - ex
+            - rake
+            - "db:migrate"
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${DeliveryECRRepoName}:latest
+          Environment:
+            - Name: RAILS_ENV
+              Value: production
+          Essential: true
+          Memory: 256
+          Secrets:
+            - Name: SECRET_KEY_BASE
+              ValueFrom: !Ref DeliverySecretKeyBaseSecretArn
+            - Name: DATABASE_URL
+              ValueFrom: !Ref DeliveryDatabaseUrlSecretArn
+          LogConfiguration:
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref AWS::Region
+              awslogs-group: !Ref LogGroup
+              awslogs-stream-prefix: !Sub ${AWS::StackName}-migrate
+
+
   #
   # RDS
   #
-  DBInstance:
+  OrderDBInstance:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: !Sub "${AWS::StackName}-${DBName}"
+      DBInstanceIdentifier: !Sub "${AWS::StackName}-order-service-production"
       Engine: MySQL
       EngineVersion: !Sub "${MySQLMajorVersion}.${MySQLMinorVersion}"
       DBInstanceClass: !Ref DBInstanceClass
       AllocatedStorage: !Ref DBInstanceStorageSize
       StorageType: !Ref DBInstanceStorageType
-      DBName: !Ref DBName
+      DBName: order_service_production
       MasterUsername: !Ref DBMasterUserName
       MasterUserPassword: !Ref DBPassword
       DBSubnetGroupName: !Ref DBSubnetGroup
@@ -409,14 +688,70 @@ Resources:
       BackupRetentionPeriod: 7
       Tags:
         - Key: Name
-          Value: !Ref DBInstanceName
+          Value: messaging-arch-order-service
+    DeletionPolicy: "Delete"
+
+  InvoiceDBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub "${AWS::StackName}-invoice-service-production"
+      Engine: MySQL
+      EngineVersion: !Sub "${MySQLMajorVersion}.${MySQLMinorVersion}"
+      DBInstanceClass: !Ref DBInstanceClass
+      AllocatedStorage: !Ref DBInstanceStorageSize
+      StorageType: !Ref DBInstanceStorageType
+      DBName: invoice_service_production
+      MasterUsername: !Ref DBMasterUserName
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      PubliclyAccessible: false
+      MultiAZ: !Ref MultiAZ
+      PreferredBackupWindow: "18:00-18:30"
+      PreferredMaintenanceWindow: "sat:19:00-sat:19:30"
+      AutoMinorVersionUpgrade: false
+      DBParameterGroupName: !Ref DBParameterGroup
+      VPCSecurityGroups:
+        - !Ref SecurityGroupRDS
+      CopyTagsToSnapshot: true
+      BackupRetentionPeriod: 7
+      Tags:
+        - Key: Name
+          Value: messaging-arch-invoice-service
+    DeletionPolicy: "Delete"
+
+  DeliveryDBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub "${AWS::StackName}-delivery-service-production"
+      Engine: MySQL
+      EngineVersion: !Sub "${MySQLMajorVersion}.${MySQLMinorVersion}"
+      DBInstanceClass: !Ref DBInstanceClass
+      AllocatedStorage: !Ref DBInstanceStorageSize
+      StorageType: !Ref DBInstanceStorageType
+      DBName: delivery_service_production
+      MasterUsername: !Ref DBMasterUserName
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      PubliclyAccessible: false
+      MultiAZ: !Ref MultiAZ
+      PreferredBackupWindow: "18:00-18:30"
+      PreferredMaintenanceWindow: "sat:19:00-sat:19:30"
+      AutoMinorVersionUpgrade: false
+      DBParameterGroupName: !Ref DBParameterGroup
+      VPCSecurityGroups:
+        - !Ref SecurityGroupRDS
+      CopyTagsToSnapshot: true
+      BackupRetentionPeriod: 7
+      Tags:
+        - Key: Name
+          Value: messaging-arch-deliver-service
     DeletionPolicy: "Delete"
 
   DBParameterGroup:
     Type: AWS::RDS::DBParameterGroup
     Properties:
       Family: !Sub "MySQL${MySQLMajorVersion}"
-      Description: !Sub "${AWS::StackName}-${DBName}-parm"
+      Description: !Sub "${AWS::StackName}-messaging-arch-parm"
 
   SecurityGroupRDS:
     Type: AWS::EC2::SecurityGroup
@@ -434,7 +769,7 @@ Resources:
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub "${AWS::StackName}-${DBName}-subnet"
+      DBSubnetGroupName: !Sub "${AWS::StackName}-messaging-arch-dbs-subnet"
       DBSubnetGroupDescription: "-"
       SubnetIds:
         - !Ref Subnet1
@@ -488,7 +823,10 @@ Resources:
                 Effect: Allow
                 Action:
                   - ecs:RunTask
-              - Resource: !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${ECRRepoName}
+              - Resource:
+                  - !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${OrderECRRepoName}
+                  - !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${InvoiceECRRepoName}
+                  - !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${DeliveryECRRepoName}
                 Effect: Allow
                 Action:
                   - ecr:GetDownloadUrlForLayer
@@ -540,7 +878,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
 
-  CodeBuildProject:
+  OrderCodeBuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
       Artifacts:
@@ -557,7 +895,7 @@ Resources:
                 - IMAGE_URI="${REPOSITORY_URI}:${TAG}"
             build:
               commands:
-                - docker build --tag "$IMAGE_URI" .
+                - docker build --tag "$IMAGE_URI" ./order-service
                 - docker push "$IMAGE_URI"
                 # migration 用の TaskDefinition の image tag を rotate できてないので毎回 latest を更新
                 - docker tag "$IMAGE_URI" "${REPOSITORY_URI}:latest"
@@ -565,9 +903,9 @@ Resources:
             post_build:
               commands:
                 - aws ecs run-task --region "$AWS_DEFAULT_REGION" --cluster "$CLUSTER_NAME" --task-definition "$MIGRATE_TASK_DEF" --launch-type "FARGATE" --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUP],assignPublicIp=ENABLED}"
-                - printf '[{"name":"%s","imageUri":"%s"}]' "$CONTAINER_NAME" "$IMAGE_URI" > images.json
+                - printf '[{"name":"%s","imageUri":"%s"}]' "$CONTAINER_NAME" "$IMAGE_URI" > order-service-images.json
           artifacts:
-            files: images.json
+            files: order-service-images.json
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/docker:17.09.0
@@ -576,18 +914,118 @@ Resources:
           - Name: AWS_DEFAULT_REGION
             Value: !Ref AWS::Region
           - Name: REPOSITORY_URI
-            Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepoName}
+            Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${OrderECRRepoName}
           - Name: CLUSTER_NAME
             Value: !Ref Cluster
           - Name: MIGRATE_TASK_DEF
-            Value: !Ref MigrateTaskDefinition
+            Value: !Ref OrderMigrateTaskDefinition
           - Name: CONTAINER_NAME
-            Value: "rails-ecs-boilerplate-app"
+            Value: !Sub ${OrderServiceName}-app
           - Name: SECURITY_GROUP
             Value: !Ref SecurityGroupECS
           - Name: SUBNETS
             Value: !Join [ ",", [ !Ref Subnet1, !Ref Subnet2 ] ]
-      Name: !Ref AWS::StackName
+      Name: !Sub ${AWS::StackName}-order-service
+      ServiceRole: !Ref CodeBuildServiceRole
+
+  InvoiceCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+          version: 0.2
+          phases:
+            pre_build:
+              commands:
+                - $(aws ecr get-login --no-include-email)
+                - TAG="$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | head -c 8)"
+                - IMAGE_URI="${REPOSITORY_URI}:${TAG}"
+            build:
+              commands:
+                - docker build --tag "$IMAGE_URI" ./invoice-service
+                - docker push "$IMAGE_URI"
+                # migration 用の TaskDefinition の image tag を rotate できてないので毎回 latest を更新
+                - docker tag "$IMAGE_URI" "${REPOSITORY_URI}:latest"
+                - docker push "${REPOSITORY_URI}:latest"
+            post_build:
+              commands:
+                - aws ecs run-task --region "$AWS_DEFAULT_REGION" --cluster "$CLUSTER_NAME" --task-definition "$MIGRATE_TASK_DEF" --launch-type "FARGATE" --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUP],assignPublicIp=ENABLED}"
+                - printf '[{"name":"%s","imageUri":"%s"}]' "$CONTAINER_NAME" "$IMAGE_URI" > invoice-service-images.json
+          artifacts:
+            files: invoice-service-images.json
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/docker:17.09.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref AWS::Region
+          - Name: REPOSITORY_URI
+            Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${InvoiceECRRepoName}
+          - Name: CLUSTER_NAME
+            Value: !Ref Cluster
+          - Name: MIGRATE_TASK_DEF
+            Value: !Ref InvoiceMigrateTaskDefinition
+          - Name: CONTAINER_NAME
+            Value: !Sub ${InvoiceServiceName}-app
+          - Name: SECURITY_GROUP
+            Value: !Ref SecurityGroupECS
+          - Name: SUBNETS
+            Value: !Join [ ",", [ !Ref Subnet1, !Ref Subnet2 ] ]
+      Name: !Sub ${AWS::StackName}-invoice-service
+      ServiceRole: !Ref CodeBuildServiceRole
+
+  DeliveryCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+          version: 0.2
+          phases:
+            pre_build:
+              commands:
+                - $(aws ecr get-login --no-include-email)
+                - TAG="$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | head -c 8)"
+                - IMAGE_URI="${REPOSITORY_URI}:${TAG}"
+            build:
+              commands:
+                - docker build --tag "$IMAGE_URI" ./delivery-service
+                - docker push "$IMAGE_URI"
+                # migration 用の TaskDefinition の image tag を rotate できてないので毎回 latest を更新
+                - docker tag "$IMAGE_URI" "${REPOSITORY_URI}:latest"
+                - docker push "${REPOSITORY_URI}:latest"
+            post_build:
+              commands:
+                - aws ecs run-task --region "$AWS_DEFAULT_REGION" --cluster "$CLUSTER_NAME" --task-definition "$MIGRATE_TASK_DEF" --launch-type "FARGATE" --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUP],assignPublicIp=ENABLED}"
+                - printf '[{"name":"%s","imageUri":"%s"}]' "$CONTAINER_NAME" "$IMAGE_URI" > delivery-service-images.json
+          artifacts:
+            files: delivery-service-images.json
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/docker:17.09.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref AWS::Region
+          - Name: REPOSITORY_URI
+            Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${DeliveryECRRepoName}
+          - Name: CLUSTER_NAME
+            Value: !Ref Cluster
+          - Name: MIGRATE_TASK_DEF
+            Value: !Ref DeliveryMigrateTaskDefinition
+          - Name: CONTAINER_NAME
+            Value: !Sub ${DeliveryServiceName}-app
+          - Name: SECURITY_GROUP
+            Value: !Ref SecurityGroupECS
+          - Name: SUBNETS
+            Value: !Join [ ",", [ !Ref Subnet1, !Ref Subnet2 ] ]
+      Name: !Sub ${AWS::StackName}-delivery-service
       ServiceRole: !Ref CodeBuildServiceRole
 
   Pipeline:
@@ -614,24 +1052,52 @@ Resources:
               OutputArtifacts:
                 - Name: App
               RunOrder: 1
+
         - Name: Build
           Actions:
-            - Name: Build
+            - Name: BuildOrderService
               ActionTypeId:
                 Category: Build
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
               Configuration:
-                ProjectName: !Ref CodeBuildProject
+                ProjectName: !Ref OrderCodeBuildProject
               InputArtifacts:
                 - Name: App
               OutputArtifacts:
-                - Name: BuildOutput
+                - Name: BuildOrderServiceOutput
               RunOrder: 1
+            - Name: BuildInvoiceService
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              Configuration:
+                ProjectName: !Ref InvoiceCodeBuildProject
+              InputArtifacts:
+                - Name: App
+              OutputArtifacts:
+                - Name: BuildInvoiceServiceOutput
+              RunOrder: 1
+            - Name: BuildDeliveryService
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              Configuration:
+                ProjectName: !Ref DeliveryCodeBuildProject
+              InputArtifacts:
+                - Name: App
+              OutputArtifacts:
+                - Name: BuildDeliveryServiceOutput
+              RunOrder: 1
+
         - Name: Deploy
           Actions:
-            - Name: Deploy
+            - Name: DeployOrderService
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -639,10 +1105,36 @@ Resources:
                 Provider: ECS
               Configuration:
                 ClusterName: !Ref AWS::StackName
-                ServiceName: !Ref FargateService
-                FileName: images.json
+                ServiceName: !Ref OrderFargateService
+                FileName: order-service-images.json
               InputArtifacts:
-                - Name: BuildOutput
+                - Name: BuildOrderServiceOutput
+              RunOrder: 1
+            - Name: DeployInvoiceService
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: ECS
+              Configuration:
+                ClusterName: !Ref AWS::StackName
+                ServiceName: !Ref InvoiceFargateService
+                FileName: invoice-service-images.json
+              InputArtifacts:
+                - Name: BuildInvoiceServiceOutput
+              RunOrder: 1
+            - Name: DeployDeliveryService
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: ECS
+              Configuration:
+                ClusterName: !Ref AWS::StackName
+                ServiceName: !Ref DeliveryFargateService
+                FileName: delivery-service-images.json
+              InputArtifacts:
+                - Name: BuildDeliveryServiceOutput
               RunOrder: 1
 
 Outputs:
@@ -657,11 +1149,21 @@ Outputs:
   #
   # ELB
   #
-  TargetGroup:
-    Value: !Ref TargetGroup
-  ServiceUrl:
+  OrderTargetGroup:
+    Value: !Ref OrderTargetGroup
+  OrderServiceUrl:
     Description: URL of the load balancer for the sample service.
-    Value: !Sub http://${LoadBalancer.DNSName}
+    Value: !Sub http://${OrderLoadBalancer.DNSName}
+  InvoiceTargetGroup:
+    Value: !Ref InvoiceTargetGroup
+  InvoiceServiceUrl:
+    Description: URL of the load balancer for the sample service.
+    Value: !Sub http://${InvoiceLoadBalancer.DNSName}
+  DeliveryTargetGroup:
+    Value: !Ref DeliveryTargetGroup
+  DeliveryServiceUrl:
+    Description: URL of the load balancer for the sample service.
+    Value: !Sub http://${DeliveryLoadBalancer.DNSName}
   SecurityGroupELB:
     Value: !Ref SecurityGroupELB
 
@@ -670,20 +1172,24 @@ Outputs:
   #
   ClusterName:
     Value: !Ref Cluster
-  Service:
-    Value: !Ref FargateService
+  OrderService:
+    Value: !Ref OrderFargateService
+  InvoiceService:
+    Value: !Ref InvoiceFargateService
+  DeliveryService:
+    Value: !Ref DeliveryFargateService
   SecurityGroupECS:
     Value: !Ref SecurityGroupECS
 
   #
   # RDS
   #
-  DBInstanceID:
-    Value: !Ref DBInstance
-  DBInstanceEndpoint:
-    Value: !GetAtt DBInstance.Endpoint.Address
-  DBName:
-    Value: !Ref DBName
+  OrderDBInstanceEndpoint:
+    Value: !GetAtt OrderDBInstance.Endpoint.Address
+  InvoiceDBInstanceEndpoint:
+    Value: !GetAtt InvoiceDBInstance.Endpoint.Address
+  DeliveryDBInstanceEndpoint:
+    Value: !GetAtt DeliveryDBInstance.Endpoint.Address
   SecurityGroupRDS:
     Value: !Ref SecurityGroupRDS
 

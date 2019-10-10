@@ -1,17 +1,24 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
 
-Parameters:
-  RepoName:
-    Type: String
-    Default: "rails-ecs-boilerplate"
-
 Resources:
-  Repository:
+  OrderRepository:
     Type: AWS::ECR::Repository
     Properties:
-      RepositoryName: !Ref RepoName
+      RepositoryName: messaging-arch/order-service
+  InvoiceRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: messaging-arch/invoice-service
+  DeliveryRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: messaging-arch/delivery-service
 
 Outputs:
-  RepositoryArn:
-    Value: !GetAtt Repository.Arn
+  OrderRepositoryArn:
+    Value: !GetAtt OrderRepository.Arn
+  InvoiceRepositoryArn:
+    Value: !GetAtt InvoiceRepository.Arn
+  DeliveryRepositoryArn:
+    Value: !GetAtt DeliveryRepository.Arn

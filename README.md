@@ -13,7 +13,7 @@ aws cloudformation validate-template \
 create-stack
 ```bash
 aws cloudformation create-stack \
-  --stack-name rails-ecs-boilerplate-ecr-1 \
+  --stack-name messaging-arch-ecr-1 \
   --template-body file://infra/ecr.yaml
 ```
 
@@ -37,7 +37,7 @@ aws cloudformation validate-template \
 create-stack
 ```bash
 aws cloudformation create-stack \
-  --stack-name rails-ecs-boilerplate-kms-1 \
+  --stack-name messaging-arch-kms-1 \
   --template-body file://infra/kms.yaml
 ```
 
@@ -52,18 +52,26 @@ aws cloudformation validate-template \
 create-stack
 ```bash
 KMSKeyArn=xxxxxx
-SecretKeyBaseSecretArn=xxxxxx
-DatabaseUrlSecretArn=xxxxxx
+OrderSecretKeyBaseSecretArn=xxxxxx
+OrderDatabaseUrlSecretArn=xxxxxx
+InvoiceSecretKeyBaseSecretArn=xxxxxx
+InvoiceDatabaseUrlSecretArn=xxxxxx
+DeliverySecretKeyBaseSecretArn=xxxxxx
+DeliveryDatabaseUrlSecretArn=xxxxxx
 GitHubToken=xxxx
 
 aws cloudformation create-stack \
-  --stack-name rails-ecs-boilerplate-ecs-1 \
+  --stack-name messaging-arch-ecs-1 \
   --template-body file://infra/ecs.yaml \
   --capabilities CAPABILITY_IAM \
   --parameters \
     ParameterKey=KMSKeyArn,ParameterValue=$KMSKeyArn \
-    ParameterKey=SecretKeyBaseSecretArn,ParameterValue=$SecretKeyBaseSecretArn \
-    ParameterKey=DatabaseUrlSecretArn,ParameterValue=$DatabaseUrlSecretArn \
+    ParameterKey=OrderSecretKeyBaseSecretArn,ParameterValue=$OrderSecretKeyBaseSecretArn \
+    ParameterKey=OrderDatabaseUrlSecretArn,ParameterValue=$OrderDatabaseUrlSecretArn \
+    ParameterKey=InvoiceSecretKeyBaseSecretArn,ParameterValue=$InvoiceSecretKeyBaseSecretArn \
+    ParameterKey=InvoiceDatabaseUrlSecretArn,ParameterValue=$InvoiceDatabaseUrlSecretArn \
+    ParameterKey=DeliverySecretKeyBaseSecretArn,ParameterValue=$DeliverySecretKeyBaseSecretArn \
+    ParameterKey=DeliveryDatabaseUrlSecretArn,ParameterValue=$DeliveryDatabaseUrlSecretArn \
     ParameterKey=GitHubToken,ParameterValue=$GitHubToken
 ```
 
